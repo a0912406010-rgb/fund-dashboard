@@ -2419,7 +2419,7 @@ function showDualFundModal(fund1, fund2, compName, period){
     function getNavData(code, cb){
         var fc = CURVES.funds&&CURVES.funds[code];
         if(fc) return cb(fc);
-        window.fetchFundNav(code).then(function(r){return r.json();}).then(function(d){
+        window.fetchFundNav(code).then(function(d){
             if(!d||!d.nav||d.nav.length<10) return cb(null);
             var apiMap={}; (d.dates||[]).forEach(function(dt,i){apiMap[dt]=d.nav[i];});
             var aligned=[],si=-1;
@@ -8380,7 +8380,6 @@ function renderFundModalChart(code, sector){
     // 非富国基金：从 API 获取净值后再渲染
     if(!fundCurve && !_fundNavCache[code]){
         window.fetchFundNav(code)
-            .then(function(r){return r.json();})
             .then(function(d){
                 if(d && d.nav && d.nav.length > 10){
                     var curveDates = (window.NAV_CURVES||{}).dates||[];
