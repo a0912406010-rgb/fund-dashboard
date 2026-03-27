@@ -1698,22 +1698,10 @@
     </style>
 
 <script>
-window._navBatchCache = {};
 window.fetchFundNav = function(code) {
-    var prefix = code.substring(0, 3);
-    var batchKey = 'batch_' + prefix;
-    if (window._navBatchCache[batchKey]) {
-        var d = window._navBatchCache[batchKey][code];
-        return Promise.resolve(d ? {code:code, dates:d.dates, nav:d.nav, si:d.si} : {error:"not found"});
-    }
-    return fetch('https://cdn.jsdelivr.net/gh/a0912406010-rgb/fund-dashboard@main/nav/' + batchKey + '.json')
+    return fetch('nav/' + encodeURIComponent(code) + '.json')
         .then(function(r){ return r.json(); })
-        .then(function(batch){
-            window._navBatchCache[batchKey] = batch;
-            var d = batch[code];
-            return d ? {code:code, dates:d.dates, nav:d.nav, si:d.si} : {error:"not found"};
-        })
-        .catch(function(){ return {error:"fetch failed"}; });
+        .catch(function(){ return {error:'fetch failed'}; });
 };
 </script>
 </head>
@@ -2034,10 +2022,10 @@ window.fetchFundNav = function(code) {
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/gh/a0912406010-rgb/fund-dashboard@main/data.js"></script>
-<script src="https://cdn.jsdelivr.net/gh/a0912406010-rgb/fund-dashboard@main/classification.js"></script>
-<script src="https://cdn.jsdelivr.net/gh/a0912406010-rgb/fund-dashboard@main/cls_history.js"></script>
-<script src="https://cdn.jsdelivr.net/gh/a0912406010-rgb/fund-dashboard@main/nav_curves.js"></script>
+<script src="data.js"></script>
+<script src="classification.js"></script>
+<script src="cls_history.js"></script>
+<script src="nav_curves.js"></script>
 <script>
 (function(){
 'use strict';
