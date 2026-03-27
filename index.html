@@ -1700,7 +1700,7 @@
 <script>
 window._navBatchCache = {};
 window.fetchFundNav = function(code) {
-    var prefix = code.substring(0, 2);
+    var prefix = code.substring(0, 3);
     var batchKey = 'batch_' + prefix;
     if (window._navBatchCache[batchKey]) {
         var d = window._navBatchCache[batchKey][code];
