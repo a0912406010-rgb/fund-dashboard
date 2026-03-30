@@ -1698,10 +1698,22 @@
     </style>
 
 <script>
+window._navBatchCache = {};
 window.fetchFundNav = function(code) {
-    return fetch('nav/' + encodeURIComponent(code) + '.json')
+    var prefix = code.substring(0, 2);
+    var batchKey = 'batch_' + prefix;
+    if (window._navBatchCache[batchKey]) {
+        var d = window._navBatchCache[batchKey][code];
+        return Promise.resolve(d ? {code:code, dates:d.dates, nav:d.nav, si:d.si} : {error:"not found"});
+    }
+    return fetch('nav/' + batchKey + '.json')
         .then(function(r){ return r.json(); })
-        .catch(function(){ return {error:'fetch failed'}; });
+        .then(function(batch){
+            window._navBatchCache[batchKey] = batch;
+            var d = batch[code];
+            return d ? {code:code, dates:d.dates, nav:d.nav, si:d.si} : {error:"not found"};
+        })
+        .catch(function(){ return {error:"fetch failed"}; });
 };
 </script>
 </head>
