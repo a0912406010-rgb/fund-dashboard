@@ -1909,6 +1909,31 @@ window.fetchFundNav = function(code) {
     </div>
 </div>
 
+<!-- Row 4: 板块业绩对比（viewB 版，联动顶部竞争对手选择） -->
+<div class="row-1col">
+    <div class="panel" style="padding:14px;">
+        <div id="viewBBoardCompare"></div>
+    </div>
+</div>
+
+<!-- Row 5: 基金经理维度 -->
+<div class="row-2col">
+    <div class="panel">
+        <div class="panel-header">
+            <h3 class="panel-title"><span class="dot dot-gold"></span>基金经理集中度对比</h3>
+            <span style="font-size:11px;color:var(--text-dim);">按管理规模分档，对比经理人数占比</span>
+        </div>
+        <div id="chartMgrConcentration" style="width:100%;height:340px;"></div>
+    </div>
+    <div class="panel">
+        <div class="panel-header">
+            <h3 class="panel-title"><span class="dot dot-gold"></span>基金经理风险-收益分布</h3>
+            <span style="font-size:11px;color:var(--text-dim);">气泡大小=管理规模</span>
+        </div>
+        <div id="chartMgrScatter" style="width:100%;height:340px;"></div>
+    </div>
+</div>
+
 <!-- 爆发与预警（板块分位数变化） -->
 <div class="row-2col">
     <div class="panel">
@@ -3393,6 +3418,270 @@ function updateSurge(){
     });
     html += '</tbody></table>';
     document.getElementById('surgeBody').innerHTML = html;
+}
+
+/* ========== viewB 板块业绩对比（联动顶部竞争对手选择） ========== */
+var _vbBcChart = null;
+var _vbShortL2 = {'行业主题':'行业','传统宽基':'宽基','主动量化':'量化','港股及QDII':'港股','主动增强':'增强','绝对收益':'绝对'};
+function _vbMiniLabel(label){
+    var s = String(label || ''); var idx = s.indexOf('·');
+    if(idx < 0) return s;
+    return (_vbShortL2[s.slice(0,idx)]||s.slice(0,idx))+'·'+s.slice(idx+1);
+}
+function updateViewBBoardCompare(){
+    var container = document.getElementById('viewBBoardCompare');
+    if(!container) return;
+    var period = document.getElementById('globalPeriod').value;
+    var selMgr = document.getElementById('globalCompSelect').value || '';
+    var L2_ORDER = {'传统宽基':1,'行业主题':2,'主动量化':3,'港股及QDII':4,'主动增强':5,'绝对收益':6};
+    var boards = (boardCompareAllData[period] || []).slice().sort(function(a,b){
+        var oa = L2_ORDER[a.l2]||99, ob = L2_ORDER[b.l2]||99;
+        if(oa !== ob) return oa - ob;
+        return (b.diff||0) - (a.diff||0);
+    });
+    if(!boards.length){ container.innerHTML = ''; return; }
+
+    // 标题
+    var compLabel = selMgr || '头部管理人';
+    var periodLabels = {'日涨跌':'昨日','近1周':'近1周','近1月':'近1月','近3月':'近3月','近6月':'近6月','近1年':'近1年','年初至今':'年初至今'};
+    var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'
+        +'<h3 class="panel-title"><span class="dot dot-gold" style="width:5px;height:5px;border-radius:50%;background:var(--fg-color);"></span>板块业绩对比'
+        +'<span style="color:var(--text-dim);font-size:11px;font-weight:400;margin-left:8px;">'+(periodLabels[period]||period)+' · 对标 '+compLabel+'</span></h3>'
+        +'</div>'
+        +'<div id="vbBcChart" style="width:100%;height:320px;"></div>'
+        +'<div style="font-size:10px;color:var(--text-dim);margin-top:6px;">口径：各板块内基金平均收益率 · 按二级分类分组 · 对标管理人跟随顶部「竞争对手」选择</div>';
+    container.innerHTML = html;
+
+    // ECharts
+    var chartEl = document.getElementById('vbBcChart');
+    if(!chartEl) return;
+    if(_vbBcChart){ _vbBcChart.dispose(); }
+    _vbBcChart = echarts.init(chartEl);
+    var bcNames = boards.map(function(b){ return _vbMiniLabel(b.label); });
+    var bcMkt = boards.map(function(b){ return Math.round((b.mktAvg||0)*100)/100; });
+    var bcFg = boards.map(function(b){ return Math.round((b.fgAvg||0)*100)/100; });
+    var bcComp = boards.map(function(b){
+        if(selMgr && b.companyAvgs && b.companyAvgs[selMgr] != null){
+            return Math.round(b.companyAvgs[selMgr]*100)/100;
+        }
+        return Math.round((b.headAvg||0)*100)/100;
+    });
+    var tc = themeColors();
+    _vbBcChart.setOption({
+        tooltip:{ trigger:'axis', axisPointer:{type:'shadow'},
+            backgroundColor:tc.tooltipBg, borderColor:tc.tooltipBorder, textStyle:{color:tc.tooltipText, fontSize:12},
+            formatter:function(params){
+                var tip = params[0].name;
+                params.forEach(function(p){
+                    tip += '<br/><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+p.color+';margin-right:4px;"></span>'
+                        +p.seriesName+': '+(p.value>0?'+':'')+p.value.toFixed(2)+'%';
+                });
+                return tip;
+            }
+        },
+        legend:{ data:['市场均值','富国均值',compLabel], top:2, textStyle:{color:tc.axis, fontSize:10},
+            icon:'roundRect', itemWidth:10, itemHeight:6 },
+        grid:{ left:50, right:12, top:30, bottom:72, containLabel:false },
+        xAxis:{ type:'category', data:bcNames,
+            axisLabel:{fontSize:11, color:tc.axis, rotate:30, interval:0},
+            axisLine:{lineStyle:{color:tc.line}}, axisTick:{show:false} },
+        yAxis:{ type:'value', axisLabel:{formatter:'{value}%', fontSize:9, color:tc.axis},
+            splitLine:{lineStyle:{color:tc.split}},
+            axisLine:{show:false} },
+        series:[
+            { name:'市场均值', type:'bar', data:bcMkt, barMaxWidth:18,
+              itemStyle:{color:'#60a5fa', borderRadius:[2,2,0,0]} },
+            { name:'富国均值', type:'bar', data:bcFg, barMaxWidth:18,
+              itemStyle:{color:'#fbbf24', borderRadius:[2,2,0,0]},
+              label:{show:true, position:'top', fontSize:8, fontFamily:'var(--font-mono)', color:tc.fg,
+                  formatter:function(p){ return (p.value>0?'+':'')+p.value.toFixed(2)+'%'; }} },
+            { name:compLabel, type:'bar', data:bcComp, barMaxWidth:18,
+              itemStyle:{color:'#a78bfa', borderRadius:[2,2,0,0]} }
+        ],
+        animationDuration:600, animationEasing:'cubicOut'
+    });
+    _vbBcChart.on('click', function(params){
+        var brd = boards[params.dataIndex];
+        if(brd) openBoardDrawer(brd.key);
+    });
+    window.addEventListener('resize', function(){ if(_vbBcChart) _vbBcChart.resize(); });
+}
+
+/* ========== 基金经理维度图表 ========== */
+var _mgrConcChart = null, _mgrScatterChart = null;
+
+function _buildMgrStats(companyFilter){
+    // 汇总每位经理的数据（按公司筛选）
+    var mgrs = {};
+    validData.forEach(function(d){
+        if(companyFilter && (d.company||'').indexOf(companyFilter) < 0) return;
+        var names = (d.manager||'').split(',');
+        names.forEach(function(name){
+            name = name.trim();
+            if(!name) return;
+            if(!mgrs[name]) mgrs[name] = {name:name, company:d.company||'', funds:[], totalScale:0};
+            mgrs[name].funds.push(d);
+            mgrs[name].totalScale += (d.scale||0);
+        });
+    });
+    return Object.values(mgrs);
+}
+
+function updateMgrConcentration(){
+    var el = document.getElementById('chartMgrConcentration');
+    if(!el || el.offsetWidth === 0) return;
+    var selMgr = document.getElementById('globalCompSelect').value || '';
+    var fgMgrs = _buildMgrStats('富国');
+    var compMgrs = selMgr ? _buildMgrStats(selMgr) : [];
+    var compLabel = selMgr || '竞争对手';
+
+    var brackets = [
+        {label:'100亿+', min:100, max:Infinity},
+        {label:'50-100亿', min:50, max:100},
+        {label:'30-50亿', min:30, max:50},
+        {label:'10-30亿', min:10, max:30},
+        {label:'<10亿', min:0, max:10}
+    ];
+
+    function countBrackets(mgrs){
+        return brackets.map(function(b){
+            return mgrs.filter(function(m){ return m.totalScale >= b.min && m.totalScale < b.max; }).length;
+        });
+    }
+    function pctBrackets(mgrs){
+        var counts = countBrackets(mgrs);
+        var total = mgrs.length || 1;
+        return counts.map(function(c){ return Math.round(c/total*1000)/10; });
+    }
+
+    var fgCounts = countBrackets(fgMgrs);
+    var fgPcts = pctBrackets(fgMgrs);
+    var compCounts = selMgr ? countBrackets(compMgrs) : [];
+    var compPcts = selMgr ? pctBrackets(compMgrs) : [];
+
+    if(_mgrConcChart) _mgrConcChart.dispose();
+    _mgrConcChart = echarts.init(el);
+    var tc = themeColors();
+    var series = [
+        { name:'富国 ('+fgMgrs.length+'人)', type:'bar', data:fgPcts, barMaxWidth:28,
+          itemStyle:{color:'#fbbf24', borderRadius:[3,3,0,0]},
+          label:{show:true, position:'top', fontSize:9, fontFamily:'var(--font-mono)', color:tc.fg,
+              formatter:function(p){ return fgCounts[p.dataIndex]+'人'; }} }
+    ];
+    if(selMgr){
+        series.push({ name:compLabel+' ('+compMgrs.length+'人)', type:'bar', data:compPcts, barMaxWidth:28,
+          itemStyle:{color:'#a78bfa', borderRadius:[3,3,0,0]},
+          label:{show:true, position:'top', fontSize:9, fontFamily:'var(--font-mono)', color:tc.labelSub,
+              formatter:function(p){ return compCounts[p.dataIndex]+'人'; }} });
+    }
+
+    _mgrConcChart.setOption({
+        tooltip:{ trigger:'axis', axisPointer:{type:'shadow'},
+            backgroundColor:tc.tooltipBg, borderColor:tc.tooltipBorder, textStyle:{color:tc.tooltipText, fontSize:12},
+            formatter:function(params){
+                var tip = params[0].name;
+                params.forEach(function(p){ tip += '<br/>'+p.seriesName+': '+p.value+'%'; });
+                return tip;
+            }
+        },
+        legend:{ top:2, textStyle:{color:tc.axis, fontSize:10}, icon:'roundRect', itemWidth:10, itemHeight:6 },
+        grid:{ left:40, right:16, top:36, bottom:30 },
+        xAxis:{ type:'category', data:brackets.map(function(b){return b.label;}),
+            axisLabel:{fontSize:11, color:tc.axis}, axisLine:{lineStyle:{color:tc.line}}, axisTick:{show:false} },
+        yAxis:{ type:'value', axisLabel:{formatter:'{value}%', fontSize:9, color:tc.axis},
+            splitLine:{lineStyle:{color:tc.split}}, axisLine:{show:false} },
+        series:series,
+        animationDuration:500
+    });
+    window.addEventListener('resize', function(){ if(_mgrConcChart) _mgrConcChart.resize(); });
+}
+
+function updateMgrScatter(){
+    var el = document.getElementById('chartMgrScatter');
+    if(!el || el.offsetWidth === 0) return;
+    var period = document.getElementById('globalPeriod').value;
+    var selMgr = document.getElementById('globalCompSelect').value || '';
+    var retF = getRetField(period);
+    var volF = retF.replace('return_','volatility_');
+    // volatility_1d 不存在，回退
+    if(volF === 'volatility_1d') volF = 'volatility_1w';
+
+    // 汇总全部头部管理人经理数据
+    var HEAD = ['富国'].concat(COMP_POOLS);
+    var allMgrs = {};
+    validData.forEach(function(d){
+        var co = d.company || '';
+        var pool = null;
+        for(var i=0;i<HEAD.length;i++){ if(co.indexOf(HEAD[i])>=0){ pool=HEAD[i]; break; } }
+        if(!pool) return;
+        var names = (d.manager||'').split(',');
+        names.forEach(function(name){
+            name = name.trim();
+            if(!name) return;
+            var key = pool + '|' + name;
+            if(!allMgrs[key]) allMgrs[key] = {name:name, pool:pool, rets:[], vols:[], totalScale:0};
+            var ret = parseNum(d[retF]);
+            var vol = parseNum(d[volF]);
+            if(!isNaN(ret)) allMgrs[key].rets.push(ret);
+            if(!isNaN(vol)) allMgrs[key].vols.push(vol);
+            allMgrs[key].totalScale += (d.scale||0);
+        });
+    });
+
+    // 只保留有数据的经理
+    var points = Object.values(allMgrs).filter(function(m){ return m.rets.length > 0 && m.vols.length > 0; });
+    points.forEach(function(m){
+        m.avgRet = m.rets.reduce(function(a,b){return a+b;},0) / m.rets.length;
+        m.avgVol = m.vols.reduce(function(a,b){return a+b;},0) / m.vols.length;
+    });
+
+    // 分三组：富国、选中竞品、其他
+    var fgData=[], compData=[], otherData=[];
+    points.forEach(function(m){
+        var r = [Math.round(m.avgVol*100)/100, Math.round(m.avgRet*100)/100, Math.max(Math.sqrt(m.totalScale)*3, 6), m.name, m.pool, m.totalScale, m.rets.length];
+        if(m.pool === '富国') fgData.push(r);
+        else if(selMgr && m.pool === selMgr) compData.push(r);
+        else otherData.push(r);
+    });
+
+    if(_mgrScatterChart) _mgrScatterChart.dispose();
+    _mgrScatterChart = echarts.init(el);
+    var tc = themeColors();
+    var compLabel = selMgr || '其他';
+    var periodLabels = {'日涨跌':'昨日','近1周':'近1周','近1月':'近1月','近3月':'近3月','近6月':'近6月','近1年':'近1年','年初至今':'年初至今'};
+
+    _mgrScatterChart.setOption({
+        tooltip:{
+            backgroundColor:tc.tooltipBg, borderColor:tc.tooltipBorder, textStyle:{color:tc.tooltipText, fontSize:12},
+            formatter:function(p){
+                var d=p.data;
+                return '<b>'+d[3]+'</b> ('+d[4]+')<br/>'+(periodLabels[period]||period)+'收益: '+(d[1]>0?'+':'')+d[1].toFixed(2)+'%<br/>波动率: '+d[0].toFixed(2)+'%<br/>管理规模: '+d[5].toFixed(1)+'亿<br/>产品数: '+d[6]+'只';
+            }
+        },
+        legend:{ data:['富国', compLabel, '其他头部'], top:2, textStyle:{color:tc.axis, fontSize:10}, icon:'circle', itemWidth:8, itemHeight:8 },
+        grid:{ left:50, right:20, top:36, bottom:36 },
+        xAxis:{ name:'波动率(%)', nameTextStyle:{color:tc.axis, fontSize:10}, type:'value',
+            axisLabel:{formatter:'{value}%', fontSize:9, color:tc.axis}, splitLine:{lineStyle:{color:tc.split}}, axisLine:{lineStyle:{color:tc.line}} },
+        yAxis:{ name:'收益率(%)', nameTextStyle:{color:tc.axis, fontSize:10}, type:'value',
+            axisLabel:{formatter:'{value}%', fontSize:9, color:tc.axis}, splitLine:{lineStyle:{color:tc.split}}, axisLine:{lineStyle:{color:tc.line}} },
+        series:[
+            { name:'其他头部', type:'scatter', data:otherData, symbolSize:function(d){return d[2];},
+              itemStyle:{color:'rgba(148,163,184,0.3)', borderColor:'rgba(148,163,184,0.5)', borderWidth:1} },
+            { name:compLabel, type:'scatter', data:compData, symbolSize:function(d){return d[2];},
+              itemStyle:{color:'rgba(167,139,250,0.6)', borderColor:'#a78bfa', borderWidth:1},
+              label:{show:compData.length<=15, fontSize:9, color:tc.labelSub, position:'right', formatter:function(p){return p.data[3];}} },
+            { name:'富国', type:'scatter', data:fgData, symbolSize:function(d){return d[2];},
+              itemStyle:{color:'rgba(251,191,36,0.7)', borderColor:'#fbbf24', borderWidth:1.5},
+              label:{show:true, fontSize:9, color:tc.fg, position:'right', formatter:function(p){return p.data[3];}} }
+        ],
+        animationDuration:500
+    });
+    window.addEventListener('resize', function(){ if(_mgrScatterChart) _mgrScatterChart.resize(); });
+}
+
+function updateMgrCharts(){
+    updateMgrConcentration();
+    updateMgrScatter();
 }
 
 /* ========== DataTable ========== */
@@ -8001,6 +8290,8 @@ function updateDashboard(){
     updateCpTop10();
     updateBurstWarn();
     updateSurge();
+    updateViewBBoardCompare();
+    updateMgrCharts();
 }
 
 /* ========== Event Bindings ========== */
@@ -8076,6 +8367,8 @@ window.getBoardPeriodData = getBoardPeriodData;
 window.getBoardFgLeaders = getBoardFgLeaders;
 window.getBoardHeadManagerChampion = getBoardHeadManagerChampion;
 window.buildMarketHeroViewpoint = buildMarketHeroViewpoint;
+window.updateViewBBoardCompare = updateViewBBoardCompare;
+window.updateMgrCharts = updateMgrCharts;
 
 })();
 
@@ -8159,11 +8452,15 @@ function toggleMainView(){
         btn.style.color = _mainView === 'A' ? 'var(--primary)' : 'var(--fg-color)';
         btn.style.borderColor = _mainView === 'A' ? 'rgba(96,165,250,0.25)' : 'rgba(251,191,36,0.25)';
         document.getElementById('viewBControls').style.display = _mainView === 'B' ? 'flex' : 'none';
+        if(_mainView === 'B'){
+            if(typeof updateViewBBoardCompare === 'function') updateViewBBoardCompare();
+            if(typeof updateMgrCharts === 'function') updateMgrCharts();
+        }
         window.scrollTo({top:0, behavior:'smooth'});
         // 触发 ECharts resize — 直接遍历图表容器
         function resizeAllCharts(){
             window.dispatchEvent(new Event('resize'));
-            var containers = document.querySelectorAll('.chart-box, .chart-box-lg, [id^="chart"], [id$="Chart"]');
+            var containers = document.querySelectorAll('.chart-box, .chart-box-lg, [id^="chart"], [id$="Chart"], #vbBcChart, #chartMgrConcentration, #chartMgrScatter');
             containers.forEach(function(el){
                 if(el.offsetWidth > 0){
                     var inst = echarts.getInstanceByDom(el);
