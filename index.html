@@ -2059,6 +2059,49 @@ window.fetchFundNav = function(code) {
     </div>
 </div>
 
+<!-- 数据通过 API 加载，回退到本地 JS 文件 -->
+<script>
+var API_BASE = (location.port === '8894' ? '' : 'http://localhost:8894');
+</script>
+<script>
+// 尝试从 API 预加载数据（异步，不阻塞）
+// 如果 API 可用，数据会在 IIFE 执行前就绪；否则 IIFE 内的 fallback 值（空数组/对象）生效
+(function(){
+    var done = 0, total = 5, failed = false;
+    function check() {
+        done++;
+        if (done >= total && !failed) {
+            // API 数据全部加载成功，触发重新渲染
+            if (typeof renderFirstScreen === 'function') renderFirstScreen();
+            if (typeof renderClsHeatmap === 'function') renderClsHeatmap();
+            if (typeof renderClsRank === 'function') renderClsRank();
+            if (typeof renderBriefPanel === 'function') renderBriefPanel();
+            if (typeof renderDynamicRankModule === 'function') renderDynamicRankModule();
+            if (window._renderMgrRankTable) window._renderMgrRankTable('近1月');
+            // 重建 DataTable 数据
+            if (window._rebuildMainTable) window._rebuildMainTable();
+        }
+    }
+    function loadJSON(url, cb) {
+        fetch(API_BASE + url).then(function(r) {
+            if (!r.ok) throw new Error(r.status);
+            return r.json();
+        }).then(function(d) { cb(d); check(); }).catch(function() { failed = true; check(); });
+    }
+    loadJSON('/api/funds', function(d) { window.FUNDS_DATA = d; });
+    loadJSON('/api/classification', function(d) { window.CLASSIFICATION_DATA = d; });
+    loadJSON('/api/cls_history', function(d) { window.CLS_HISTORY = d; });
+    loadJSON('/api/nav/sectors', function(d) {
+        window.NAV_CURVES = window.NAV_CURVES || {};
+        window.NAV_CURVES.sectors = d;
+    });
+    loadJSON('/api/nav/dates', function(d) {
+        window.NAV_CURVES = window.NAV_CURVES || {};
+        window.NAV_CURVES.dates = d;
+        window.NAV_CURVES.funds = {};
+    });
+})();
+</script>
 <script src="data.js"></script>
 <script src="classification.js"></script>
 <script src="cls_history.js"></script>
@@ -2444,7 +2487,7 @@ function showDualFundModal(fund1, fund2, compName, period){
     function getNavData(code, cb){
         var fc = CURVES.funds&&CURVES.funds[code];
         if(fc) return cb(fc);
-        window.fetchFundNav(code).then(function(d){
+        fetch(API_BASE+'/api/fund_nav?code='+encodeURIComponent(code)).then(function(r){return r.json();}).then(function(d){
             if(!d||!d.nav||d.nav.length<10) return cb(null);
             var apiMap={}; (d.dates||[]).forEach(function(dt,i){apiMap[dt]=d.nav[i];});
             var aligned=[],si=-1;
@@ -8676,7 +8719,8 @@ function renderFundModalChart(code, sector){
 
     // 非富国基金：从 API 获取净值后再渲染
     if(!fundCurve && !_fundNavCache[code]){
-        window.fetchFundNav(code)
+        fetch(API_BASE+'/api/fund_nav?code='+encodeURIComponent(code))
+            .then(function(r){return r.json();})
             .then(function(d){
                 if(d && d.nav && d.nav.length > 10){
                     var curveDates = (window.NAV_CURVES||{}).dates||[];
@@ -9371,6 +9415,7 @@ function renderFundModalRisk(meta){
     addChip('最大回撤(今年)','max_drawdown_ytd','%');
     document.getElementById('fundModalRiskRow').innerHTML = chips.join('');
 }
+
 </script>
 
 </div><!-- /viewB -->
